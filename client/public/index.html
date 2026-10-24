@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>fc-three client</title>
+<style>
+:root{--fg:#1b1b1f;--mut:#6b6b76;--bg:#fafaf8;--line:#e3e3df;--acc:#6a3fd1}
+@media (prefers-color-scheme:dark){:root{--fg:#e8e8ea;--mut:#9a9aa5;--bg:#141417;--line:#2a2a30;--acc:#a98bff}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+main{max-width:640px;margin:auto;padding:12px}header{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+small,.mut{color:var(--mut)}textarea,input{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit}
+button{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+button.p{background:var(--acc);color:#fff;border-color:var(--acc)}.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0}
+.cast{border-top:1px solid var(--line);padding:10px 0}.cast p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:10px;padding:0 6px}.chip{font-size:13px}
+#status{min-height:1.4em}
+</style></head><body><main>
+<header><h1 style="font-size:18px;margin:8px 0">fc-three</h1><small id="who">…</small></header>
+<small id="node"></small>
+<div class="row"><textarea id="text" rows="3" maxlength="1024" placeholder="Write a cast (max 1024 bytes)"></textarea></div>
+<div class="row"><button class="p" id="send">Cast</button><span id="reply" class="mut"></span><span id="status" class="mut"></span></div>
+<div class="row"><input id="follow" placeholder="username or FID to follow / view" style="flex:1"><button id="fol">Follow</button><button id="unf">Unfollow</button><button id="view">View</button></div>
+<details><summary>Filter by client (app FID)</summary>
+<p class="mut">Every app key records the FID of the app that requested it. Tick to include only those clients; untick everything to show all. Exclude hides a client.</p>
+<div id="apps"></div></details>
+<div class="row"><button id="home">Following feed</button><small id="count" class="mut"></small></div>
+<div id="feed"></div>
+</main><script>
+const $=s=>document.querySelector(s),st=m=>$("#status").textContent=m;let replyTo=null,viewFid=null;const inc=new Set(),exc=new Set();
+const api=async(p,b)=>{const r=await fetch(p,b?{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}:{});const j=await r.json();if(!r.ok)throw new Error(j.error);return j};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const when=ts=>new Date((ts+1609459200)*1000).toLocaleString();
+async function resolve(v){v=v.trim().replace(/^@/,"");return /^\d+$/.test(v)?Number(v):(await api("/api/lookup?name="+encodeURIComponent(v))).fid}
+async function load(){st("loading from your node…");const q=new URLSearchParams({include:[...inc].join(","),exclude:[...exc].join(",")});if(viewFid)q.set("fid",viewFid);
+ try{const {casts,apps}=await api("/api/feed?"+q);$("#count").textContent=`${casts.length} casts${viewFid?" from fid "+viewFid:""}`;
+ $("#apps").innerHTML=apps.sort((a,b)=>b.n-a.n).map(a=>`<div class="row chip"><label><input type="checkbox" style="width:auto" data-i="${a.fid}" ${inc.has(+a.fid)?"checked":""}> ${a.fid==="unknown"?"unknown":"app "+a.fid}${a.name?" (@"+esc(a.name)+")":""}</label> <span class="mut">${a.n}</span> <label><input type="checkbox" style="width:auto" data-x="${a.fid}" ${exc.has(+a.fid)?"checked":""}> exclude</label></div>`).join("");
+ $("#feed").innerHTML=casts.map(c=>`<div class="cast"><div class="row"><b>${esc(c.author.display||c.author.username||"fid "+c.fid)}</b><small>@${esc(c.author.username??c.fid)} · ${when(c.ts)}</small><span class="tag" title="app FID that requested the signing key">via ${c.appFid??"?"}</span></div>
+ ${c.parent?`<small class="mut">reply to fid ${c.parent.fid}</small>`:""}<p>${esc(c.text)}</p>
+ <div class="row"><button data-like="${c.fid}:${c.hash}">Like</button><button data-rc="${c.fid}:${c.hash}">Recast</button><button data-re="${c.fid}:${c.hash}">Reply</button></div></div>`).join("")||"<p class=mut>Nothing yet. Follow someone, or your node may still be syncing.</p>";st("")}catch(e){st(e.message)}}
+document.addEventListener("change",e=>{const i=e.target.dataset.i,x=e.target.dataset.x;if(i){e.target.checked?inc.add(+i):inc.delete(+i);load()}if(x){e.target.checked?exc.add(+x):exc.delete(+x);load()}});
+document.addEventListener("click",async e=>{const d=e.target.dataset;try{
+ if(d.like||d.rc){const[fid,hash]=(d.like||d.rc).split(":");await api("/api/react",{fid,hash,type:d.rc?"recast":"like"});st("accepted by your node, relayed to validators");e.target.disabled=true}
+ if(d.re){const[fid,hash]=d.re.split(":");replyTo={fid,hash};$("#reply").textContent=`replying to fid ${fid} ✕`;$("#text").focus()}}catch(err){st(err.message)}});
+$("#reply").onclick=()=>{replyTo=null;$("#reply").textContent=""};
+$("#send").onclick=async()=>{const text=$("#text").value.trim();if(!text)return;try{const r=await api("/api/cast",{text,parentFid:replyTo?.fid,parentHash:replyTo?.hash});
+ $("#text").value="";st("accepted, waiting for a block…");const me=await api("/api/me");for(let i=0;i<20;i++){await new Promise(r=>setTimeout(r,1500));if((await api(`/api/check?fid=${me.fid}&hash=${r.hash}`)).merged){st("in a block: "+r.hash.slice(0,10));return}}st("not seen yet; it may need resubmitting")}catch(e){st(e.message)}};
+const fol=undo=>async()=>{try{await api("/api/follow",{fid:await resolve($("#follow").value),undo});st(undo?"unfollowed":"followed")}catch(e){st(e.message)}};
+$("#fol").onclick=fol(false);$("#unf").onclick=fol(true);
+$("#view").onclick=async()=>{try{viewFid=await resolve($("#follow").value);load()}catch(e){st(e.message)}};$("#home").onclick=()=>{viewFid=null;load()};
+api("/api/me").then(m=>{$("#who").textContent=`@${m.profile.username??m.fid} · fid ${m.fid} · app key from app ${m.appFid} (${m.mode})`;$("#node").textContent=`reading ${m.node} · writing ${m.writeUrl}`});load();
+</script></body></html>

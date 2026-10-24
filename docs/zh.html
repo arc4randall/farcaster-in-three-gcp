@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>三条命令跑起 Farcaster（Google Cloud）</title><link rel="stylesheet" href="style.css"></head><body><main>
+<nav><a href="index.html">English</a><a href="#quickstart">快速开始</a><a href="#concepts">概念</a><a href="#writes">写入路径</a><a href="https://github.com/arc4randall/farcaster-in-three-gcp">GitHub</a></nav>
+<h1>三条命令跑起 Farcaster（Google Cloud）</h1>
+<p class="mut">本页为机器辅助翻译的精简版，如有出入以<a href="index.html">英文版</a>为准。欢迎提交 PR 修正。</p>
+<p>完成后你会有一台自己付费的虚拟机，上面运行 Snapchain 只读节点（read node），以及一个从该节点读取数据、通过该节点发帖的小型网页客户端。不需要任何 API key。</p>
+
+<section class="quick" id="quickstart"><h2 style="border:0;margin-top:.6rem">快速开始</h2>
+<p>在 <a href="https://shell.cloud.google.com">Cloud Shell</a>（已登录 gcloud）或任何配置好 <code>gcloud</code> 且已启用结算的项目中运行：</p>
+<pre><code>git clone https://github.com/arc4randall/farcaster-in-three-gcp && cd farcaster-in-three-gcp</code></pre>
+<ol start="0">
+<li><strong>创建算力</strong>（e2-standard-4、2 TB pd-balanced 磁盘、开放 3382/udp 防火墙）：<pre><code>./provision.sh</code></pre></li>
+<li><strong>启动 Snapchain 只读节点</strong>（Docker，镜像固定为 <code>farcasterxyz/snapchain:0.14.3</code>）：<pre><code>./node.sh</code></pre>首次启动会下载快照并追块，需要数小时。</li>
+<li><strong>运行客户端</strong>：首次运行会要求输入助记词并注册 app key，然后打开 <a href="http://localhost:3000">localhost:3000</a>：<pre><code>./client.sh</code></pre></li>
+</ol>
+<p class="mut">删除全部资源：<code>gcloud compute instances delete fc-node --zone us-central1-a</code></p></section>
+
+<div class="warn"><strong>输入助记词之前请先读这里。</strong>
+<ul><li>助记词等于账户的全部控制权：可以转走 FID、修改恢复地址、增删所有 key。请像对待 <code>rm -rf /</code> 一样谨慎。</li>
+<li><strong>请使用测试账户</strong>，不要用主账户。</li>
+<li>只把助记词交给你读过代码或信任其开发者的软件。运行前请阅读 <code>client/setup.mjs</code>（约 100 行）。</li>
+<li>能用委托签名授权（在钱包或已有客户端里批准请求）时优先使用，这样助记词不会离开原处。</li>
+<li>本客户端：<code>setup.mjs</code> 在你自己的虚拟机上从终端读取助记词（不回显），只在内存中签两条 EIP-712 消息后退出；不写盘、不发送给其他服务器、不进入网页界面。只保存新生成的 app key（权限 600）。</li></ul></div>
+
+<h2 id="concepts">核心概念</h2>
+<h3>FID</h3><p>Farcaster 账户就是一个数字 FID，由 Optimism 上的 <code>IdRegistry</code> 合约发放。用户名只是指向 FID 的另一层。</p>
+<h3>托管地址（custody address）</h3><p>拥有该 FID 的以太坊地址，由助记词派生。它不直接签发帖子，而是授权其他 key 代为签名，也可以转移 FID。</p>
+<h3>App key（签名者）</h3><p>Ed25519 密钥对，应用持有私钥并用它签名每一条消息。添加 key 时，请求方应用的 FID 会签一个 <code>SignedKeyRequest</code>，其中的 <code>requestFid</code> 与 key 一起保存，因此可以据此判断任意一条 cast 来自哪个客户端。</p>
+<p>两种添加方式：<strong>免 gas 的 <code>KEY_ADD</code></strong>（FIP-272，自引擎 V16 起上线，本项目默认）——无需交易，带权限范围（scopes）和最长 90 天的滑动有效期，需要使用 <code>currentUserNonce + 1</code>；以及<strong>链上 <code>KeyGateway.add</code></strong>（Optimism，一笔交易），用 <code>./client.sh --onchain</code> 启用。</p>
+<h3>Snapchain 消息</h3><p>所有操作都是 protobuf <code>Message</code>：包含 <code>MessageData</code>（类型、FID、自 2021-01-01 起的秒数时间戳、正文）、截断为 20 字节的 BLAKE3 哈希、Ed25519 签名和签名者公钥。</p>
+<h3>只读节点与验证者</h3><p>所有节点运行同一程序。主网少数验证者负责出块投票；任何人都可以运行只读节点：从对等节点获取已决定的区块、校验后应用，并在 3381（HTTP）和 3383（gRPC）提供 API。</p>
+<h3>存储租金</h3><p>账户需在 Optimism 的 <code>StorageRegistry</code> 租用存储单元，一个单元有效期一年，每种消息有上限，超出后最旧的消息被裁剪。查询：<code>curl -s "localhost:3381/v1/storageLimitsByFid?fid=你的FID"</code>。没有存储的 FID 发出的消息会被拒绝。</p>
+
+<h2 id="writes">一条写入如何到达链上</h2>
+<ol><li>客户端构造并签名消息，POST 到你自己节点的 <code>/v1/submitMessage</code>。</li>
+<li>节点按 FID 分配分片并校验（签名、key、权限、存储）。</li>
+<li>只读节点没有内存池，只把消息通过 3382/udp 的 <code>mempool</code> gossip 主题转发出去。</li>
+<li>验证者从 gossip 收到后放入内存池并打包进区块。</li>
+<li>你的节点同步到该区块后，消息即可读取。</li></ol>
+<p>因此 <code>submitMessage</code> 返回 200 只表示“有效并已转发”，不表示已上链。客户端发帖后会轮询 <code>/v1/castById</code> 确认。</p>
+
+<h2>费用</h2><p>us-central1 按需价格：VM 约 $98/月，2000 GB 磁盘约 $200/月，合计约每天 $10。用完请删除 VM。</p>
+<h2>故障排查</h2><ul><li>“owns no FID”：试试 <code>ACCOUNT_INDEX=1</code>。</li><li>KEY_ADD nonce 错误：重新运行 <code>./client.sh</code>。</li><li>发帖成功但看不到：gossip 丢失，重发；检查 3382/udp 是否开放。</li><li>信息流为空：节点仍在同步（看 <code>blockDelay</code>）。</li></ul>
+<p class="mut">完整内容见<a href="index.html">英文版</a>。MIT 许可。</p>
+</main></body></html>

@@ -1,0 +1,22 @@
+{
+  "name": "fc-three-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "node setup.mjs",
+    "setup:onchain": "node setup.mjs --onchain",
+    "start": "node server.mjs",
+    "test": "node test.mjs",
+    "check": "node --check lib.mjs && node --check setup.mjs && node --check server.mjs"
+  },
+  "dependencies": {
+    "@farcaster/hub-nodejs": "0.17.0",
+    "express": "5.3.0",
+    "viem": "2.57.11"
+  }
+}
