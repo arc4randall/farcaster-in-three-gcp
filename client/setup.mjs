@@ -16,7 +16,7 @@ import {
 import { createPublicClient, createWalletClient, http as viemHttp, bytesToHex, formatEther } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { optimism } from "viem/chains";
-import { cfg, rpc, submit, signerFile } from "./lib.mjs";
+import { cfg, getSigners, submit, signerFile } from "./lib.mjs";
 
 const gasless = !process.argv.includes("--onchain");
 const idx = Number(process.env.ACCOUNT_INDEX ?? 0);
@@ -68,11 +68,11 @@ if (!gasless) {
   const rc = await pub.waitForTransactionReceipt({ hash: tx });
   if (rc.status !== "success") { console.error("transaction reverted"); process.exit(1); }
 } else {
-  const s = await rpc.getSignersByFid({ fid: Number(fid) });
-  if (s.isErr()) throw new Error(s.error.message);
+  const s = await getSigners(fid);
+  if (s.nonce == null) { console.error("Gasless KEY_ADD needs the user nonce over gRPC. Set NODE_GRPC_URL, use your own node, or use delegated approval."); process.exit(1); }
   const now = getFarcasterTime()._unsafeUnwrap();
   const body = (await makeKeyAddBody({
-    fid, key: pubKey, nonce: s.value.currentUserNonce + 1, deadline: now + 3600,
+    fid, key: pubKey, nonce: s.nonce + 1, deadline: now + 3600,
     ttl: MAX_KEY_TTL_SECONDS, requestFid: appFid,
     scopes: [MessageType.CAST_ADD, MessageType.CAST_REMOVE, MessageType.REACTION_ADD,
              MessageType.REACTION_REMOVE, MessageType.LINK_ADD, MessageType.LINK_REMOVE],
@@ -85,8 +85,8 @@ fs.mkdirSync(cfg.dataDir, { recursive: true });
 fs.writeFileSync(signerFile(), JSON.stringify({ fid: Number(fid), appFid: Number(appFid), privateKey: bytesToHex(priv), publicKey: bytesToHex(pubKey), mode: gasless ? "gasless" : "onchain" }, null, 2), { mode: 0o600 });
 process.stdout.write("Waiting for your node to see the key");
 for (let i = 0; i < 90; i++) {
-  const r = await rpc.getSignersByFid({ fid: Number(fid) });
-  if (r.isOk() && r.value.signers.some((x) => bytesToHex(x.key) === bytesToHex(pubKey))) { console.log("\nKey is live. Start the client: npm start"); process.exit(0); }
+  const r = await getSigners(fid).catch(() => ({ signers: [] }));
+  if (r.signers.some((x) => x.key === bytesToHex(pubKey).toLowerCase())) { console.log("\nKey is live. Start the client: npm start"); process.exit(0); }
   process.stdout.write("."); await new Promise((r) => setTimeout(r, 2000));
 }
 console.log("\nNot visible yet. If the node is still syncing it will appear once it catches up.");

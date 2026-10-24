@@ -42,7 +42,7 @@
 <li>你的节点同步到该区块后，消息即可读取。</li></ol>
 <p>因此 <code>submitMessage</code> 返回 200 只表示“有效并已转发”，不表示已上链。客户端发帖后会轮询 <code>/v1/castById</code> 确认。</p>
 
-<h2>费用</h2><p>us-central1 按需价格：VM 约 $98/月，2000 GB 磁盘约 $200/月，合计约每天 $10。用完请删除 VM。</p>
-<h2>故障排查</h2><ul><li>“owns no FID”：试试 <code>ACCOUNT_INDEX=1</code>。</li><li>KEY_ADD nonce 错误：重新运行 <code>./client.sh</code>。</li><li>发帖成功但看不到：gossip 丢失，重发；检查 3382/udp 是否开放。</li><li>信息流为空：节点仍在同步（看 <code>blockDelay</code>）。</li></ul>
+<h2>费用</h2><p>us-central1 按需价格：VM 约 $98/月，2000 GB pd-standard 磁盘约 $80/月，合计约每天 $6。用完请删除 VM。</p>
+<h2>故障排查</h2><ul><li>“owns no FID”：试试 <code>ACCOUNT_INDEX=1</code>。</li><li>KEY_ADD nonce 错误：重新运行 <code>./client.sh</code>。</li><li>发帖成功但看不到：gossip 丢失，重发；检查 3382/udp 是否开放。</li><li>信息流为空：节点仍在同步（看 <code>blockDelay</code>）。</li><li><code>UREQ_PROJECT_BILLING_NOT_FOUND</code>：项目没有关联结算账号，检查命令里是否还留着占位符。</li><li>SSD_TOTAL_GB 配额 500：新项目每个区域只有 500 GB SSD，请用 <code>DISK_TYPE=pd-standard</code>（默认）。</li><li>“磁盘大于镜像”警告：无害，可以忽略。</li><li>注册额外的 Farcaster 账号需要邀请或付费（第一个账号免费）；一个账号也可以兼作自己的 app FID。</li></ul><h2>临时方案</h2><p>自己的节点同步期间，可以先用公共节点：<code>NODE_URL=https://haatz.quilibrium.com ./client.sh</code>。这是 Quilibrium 运行的节点，不需要 API key。它不是你自己的节点，可能落后于最新数据，而且没有 gRPC，所以只能看到链上密钥。界面会显示黄色的 STOPGAP 横幅。自己的节点同步完成后，请取消 NODE_URL。</p><h2>实测</h2><p>e2-standard-4 + pd-standard，us-central1：快照共 5699 块，每块约 87–90 MB，总计约 500 GB；每块约 3–5 秒，预计约 4.5 小时。阿拉木图时间（UTC+5）17:30 时进度为 21%。</p>
 <p class="mut">完整内容见<a href="index.html">英文版</a>。MIT 许可。</p>
 </main></body></html>

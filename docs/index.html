@@ -133,8 +133,21 @@ gcloud compute ssh fc-node -- 'curl -s localhost:3381/v1/info | jq ".shardInfos[
 <tr><td>2,000 GB pd-standard</td><td>~$0.04/GB-month</td><td>~$80</td></tr>
 <tr><td>Snapshot download</td><td>ingress is free</td><td>$0</td></tr>
 <tr><td>App key</td><td>gasless</td><td>$0 (onchain path: a few cents of ETH on Optimism)</td></tr></table>
-<p class="mut">Roughly $10/day. Check the <a href="https://cloud.google.com/products/calculator">pricing calculator</a> for your region. Delete the VM when you're done.</p>
-<p>Timing: <code>provision.sh</code> and <code>node.sh</code> take a few minutes. The snapshot is several hundred GB; Snapchain's docs say "a few hours" to download and decompress, then catch-up depends on the snapshot's age. Our measured numbers are in the <a href="https://github.com/arc4randall/farcaster-in-three-gcp#measured">README</a>.</p>
+<p class="mut">Roughly $6/day. Check the <a href="https://cloud.google.com/products/calculator">pricing calculator</a> for your region. Delete the VM when you're done.</p>
+<p>Timing: <code>provision.sh</code> and <code>node.sh</code> take a few minutes. The snapshot is several hundred GB; Snapchain's docs say "a few hours" to download and decompress, then catch-up depends on the snapshot's age. Our measured numbers are below.</p>
+
+<h3 id="measured">Measured (our run, 24 Oct 2026)</h3>
+<table><tr><th>What</th><th>Number</th></tr>
+<tr><td>Setup</td><td>e2-standard-4, 2,000 GB pd-standard, us-central1-a, Snapchain 0.14.3</td></tr>
+<tr><td>Snapshot</td><td>5,699 chunks, about 87–90 MB each, about 500 GB total</td></tr>
+<tr><td>Download speed</td><td>about 3–5 s per chunk</td></tr>
+<tr><td>Snapshot ETA</td><td>about 4.5 hours, then catch-up</td></tr>
+<tr><td>Progress</td><td>21% at 17:30 Almaty time (UTC+5)</td></tr></table>
+<p class="mut">pd-standard is the slow disk tier. pd-balanced or SSD would probably be faster, but new projects can't get that much SSD quota (see Troubleshooting). Catch-up time after the snapshot hasn't been measured yet.</p>
+
+<h3 id="stopgap">Stopgap: use a public node while yours syncs</h3>
+<p>You can point the client at someone else's node while yours syncs: <code>NODE_URL=https://haatz.quilibrium.com ./client.sh</code>. That's a public Snapchain node run by Quilibrium. It works with no API key. We checked <code>/v1/info</code>, reads, and that <code>submitMessage</code> answers. The client shows a yellow STOPGAP banner while this is on.</p>
+<p>Caveats: it isn't your node, so you're trusting its operator. When we checked it was on 0.13.5 and some shards were behind. It has no public gRPC, so signer lookups fall back to HTTP, which only sees onchain keys. Delegated approval still works, but gasless <code>--seed</code> setup needs gRPC (<code>NODE_GRPC_URL</code>). Neynar's hub API now asks for an API key or an x402 payment, so it doesn't count as keyless. Unset <code>NODE_URL</code> once your own <code>blockDelay</code> is in single digits.</p>
 
 <h2 id="trouble">Troubleshooting</h2>
 <h3>"owns no FID"</h3><p>The phrase derived an address with no FID. Try <code>ACCOUNT_INDEX=1</code>.</p>
@@ -143,6 +156,11 @@ gcloud compute ssh fc-node -- 'curl -s localhost:3381/v1/info | jq ".shardInfos[
 <h3>Cast accepted but never appears</h3><p>Gossip dropped it. Post again. If it keeps happening, check that 3382/udp is open: <code>gcloud compute firewall-rules list</code>.</p>
 <h3>Empty feed</h3><p>The node is still syncing (check <code>blockDelay</code>), or you follow nobody. Use "View" with a username to read any account.</p>
 <h3>Snapshot download restarts</h3><p>Usually the disk filled up. <code>df -h</code> on the VM; the snapshot plus decompressed DB need well over 1 TB.</p>
+<h3>UREQ_PROJECT_BILLING_NOT_FOUND</h3><p>The project has no billing account linked. If you pasted the billing command from a guide, check you didn't leave a placeholder in it. Fix: <code>gcloud billing accounts list</code>, then <code>gcloud billing projects link PROJECT --billing-account=REAL_ID</code>.</p>
+<h3>Quota SSD_TOTAL_GB exceeded (limit 500)</h3><p>New projects can only have 500 GB of SSD per region, which includes pd-balanced. We default to <code>DISK_TYPE=pd-standard</code> in <code>config.env</code>. Switch to pd-balanced only after you've had the quota raised.</p>
+<h3>"Disk size is larger than image size" warning</h3><p>This warning is harmless. Ubuntu 24.04 grows the root partition to fill the disk on first boot. Check with <code>df -h /</code>.</p>
+<h3>Creating a second Farcaster account asks for an invite or a fee</h3><p>The Farcaster app sponsors your first account. Extra accounts, like a separate app FID or a test account, need an invite or a small fee. You can also register one onchain yourself.</p>
+<h3>Do I need a separate app FID?</h3><p>No. An account can be its own app FID. The keys it approves are then attributed to that FID. A separate FID just keeps your app's identity apart from your personal one.</p>
 <h3>"Your node isn't answering on :3381"</h3><p>The container isn't up yet or crashed: <code>sudo docker compose ps</code> and <code>logs</code> in <code>~/snapchain</code>.</p>
 
 <h2>Sources</h2>

@@ -13,8 +13,10 @@ git clone https://github.com/arc4randall/farcaster-in-three-gcp && cd farcaster-
 ./client.sh      # 2. client on localhost:3000 over SSH; approve its key in the Farcaster app
 ```
 
-**Status:** code and tutorial complete; scripts lint clean and the offline tests pass.
-Not yet run end to end on GCP or mainnet; measured results will go under [Measured](#measured).
+**Status (at submission, 24 Oct 2026):** `provision.sh` and `node.sh` ran on GCP. My node is
+**still syncing**: the snapshot was 21% downloaded at 17:30 Almaty time (UTC+5), with about 4.5 hours
+to go. So the client hasn't run end to end against my own synced node yet. It has run against a public
+node (see Stopgap below). The scripts lint clean and the offline tests pass.
 
 Run from Cloud Shell or anywhere `gcloud` is logged in with a billing-enabled project.
 Settings live in `config.env` (zone, VM name, machine type, disk size, Snapchain version).
@@ -52,8 +54,20 @@ with `/v1/castById`. Details: https://snapchain.farcaster.xyz/node-types#message
 ## Measured
 
 <a id="measured"></a>
-Not measured yet. Provision time, snapshot download, catch-up and disk use will go here
-after the first full run.
+From our run: e2-standard-4, 2,000 GB pd-standard, us-central1-a, Snapchain 0.14.3.
+
+| What | Number |
+|---|---|
+| Snapshot | 5,699 chunks, about 87–90 MB each, about 500 GB total |
+| Download speed | about 3–5 s per chunk |
+| Snapshot ETA | about 4.5 h (catch-up afterwards not measured yet) |
+| Progress | 21% at 17:30 Almaty time (UTC+5) |
+
+### Stopgap: public node while yours syncs
+
+`NODE_URL=https://haatz.quilibrium.com ./client.sh` points reads and writes at Quilibrium's public node. It needs no API key; we checked `/v1/info`, reads, and that `submitMessage` answers. **This is a stopgap, not your node.** The UI shows a STOPGAP banner while it's on. When we checked, the node was on 0.13.5 and some shards were behind. It has no public gRPC, so signer lookups use HTTP and only see onchain keys. Delegated approval still works, but `--seed` gasless setup needs `NODE_GRPC_URL`. Neynar's hub API needs an API key or an x402 payment. Unset `NODE_URL` once your node's `blockDelay` is in single digits.
+
+Troubleshooting from the real run (billing placeholder, the SSD quota, the disk-size warning, extra accounts, using an account as its own app FID) is on the [site](docs/index.html#trouble).
 
 ## Develop
 

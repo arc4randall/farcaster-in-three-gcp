@@ -14,7 +14,7 @@ import { randomBytes } from "node:crypto";
 import { NobleEd25519Signer, ViemLocalEip712Signer } from "@farcaster/hub-nodejs";
 import { privateKeyToAccount } from "viem/accounts";
 import { bytesToHex } from "viem";
-import { cfg, rpc, signerFile } from "./lib.mjs";
+import { cfg, getSigners, signerFile } from "./lib.mjs";
 
 const API = process.env.FARCASTER_API ?? "https://api.farcaster.xyz";
 export const appFile = () => path.join(cfg.dataDir, "app.json");
@@ -49,8 +49,8 @@ export async function poll() {
   const s = j.result?.signedKeyRequest;
   if (!s) return { state: "error", error: JSON.stringify(j) };
   if (s.state !== "completed") return { state: s.state, userFid: s.userFid };
-  const seen = await rpc.getSignersByFid({ fid: s.userFid });
-  if (!(seen.isOk() && seen.value.signers.some((x) => bytesToHex(x.key) === pending.pub)))
+  const seen = await getSigners(s.userFid).catch(() => ({ signers: [] }));
+  if (!seen.signers.some((x) => x.key === pending.pub.toLowerCase()))
     return { state: "waiting-for-node", userFid: s.userFid };
   fs.mkdirSync(cfg.dataDir, { recursive: true });
   fs.writeFileSync(signerFile(), JSON.stringify({ fid: s.userFid, appFid: pending.appFid, privateKey: pending.priv, publicKey: pending.pub, mode: "delegated" }, null, 2), { mode: 0o600 });

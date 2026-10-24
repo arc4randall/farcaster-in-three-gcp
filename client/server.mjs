@@ -63,7 +63,7 @@ app.get("/api/connect/status", wrap(async () => {
   if (r.state === "ready") useKey();
   return r;
 }));
-app.get("/api/me", wrap(async () => !me ? { connected: false, appConfigured: !!delegated.loadApp(), node: cfg.nodeHttp } : ({ connected: true, ...me, privateKey: undefined, node: cfg.nodeHttp, writeUrl: cfg.writeUrl, profile: await profile(me.fid) })));
+app.get("/api/me", wrap(async () => !me ? { connected: false, appConfigured: !!delegated.loadApp(), node: cfg.nodeHttp, stopgap: cfg.stopgap } : ({ connected: true, ...me, privateKey: undefined, node: cfg.nodeHttp, stopgap: cfg.stopgap, writeUrl: cfg.writeUrl, profile: await profile(me.fid) })));
 app.get("/api/info", wrap(() => http("/v1/info")));
 app.get("/api/lookup", wrap(async (req) => {
   const r = await http(`/v1/userNameProofByName?name=${encodeURIComponent(req.query.name)}`);

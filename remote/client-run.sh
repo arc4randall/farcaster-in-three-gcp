@@ -9,8 +9,12 @@ if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split("."
 fi
 cd ~/fc-client-src
 npm ci --omit=dev --no-audit --no-fund --loglevel=error
-info=$(curl -s localhost:3381/v1/info || true)
-if [ -z "$info" ]; then echo "Your node isn't answering on :3381. Run ./node.sh first." >&2; exit 1; fi
+if [ -n "${NODE_URL:-}" ]; then
+  export NODE_URL; [ -n "${NODE_GRPC_URL:-}" ] && export NODE_GRPC_URL
+  echo "STOPGAP: using public node $NODE_URL instead of your own. Unset NODE_URL once ./node.sh shows blockDelay in single digits."
+fi
+info=$(curl -s "${NODE_URL:-http://localhost:3381}/v1/info" || true)
+if [ -z "$info" ]; then echo "Node isn't answering at ${NODE_URL:-localhost:3381}. Run ./node.sh first (or set NODE_URL as a stopgap)." >&2; exit 1; fi
 echo "node: $(echo "$info" | jq -c '[.shardInfos[] | {shard: .shardId, blockDelay}]')"
 echo "(blockDelay in single digits on every shard = in sync)"
 if [ ! -f data/signer.json ]; then

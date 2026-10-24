@@ -6,6 +6,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck source=config.env
 source ./config.env
+# STOPGAP while your node syncs: NODE_URL=https://haatz.quilibrium.com ./client.sh
+# (a public keyless node run by Quilibrium; not yours, may lag; unset once synced)
 SETUP_FLAG="${1:-}"   # default: delegated approval. --seed: import a test account phrase. --onchain: legacy KeyGateway tx
 gcloud compute ssh "$VM" --zone "$ZONE" --project "$PROJECT" -- "mkdir -p ~/fc-client-src"
 gcloud compute scp --recurse --zone "$ZONE" --project "$PROJECT" \
@@ -13,4 +15,4 @@ gcloud compute scp --recurse --zone "$ZONE" --project "$PROJECT" \
   "$VM":~/fc-client-src/ >/dev/null
 echo "Open http://localhost:3000 once you see 'client on ...'"
 gcloud compute ssh "$VM" --zone "$ZONE" --project "$PROJECT" -- -t -L 3000:127.0.0.1:3000 \
-  "bash ~/fc-client-src/client-run.sh $SETUP_FLAG"
+  "NODE_URL='${NODE_URL:-}' NODE_GRPC_URL='${NODE_GRPC_URL:-}' bash ~/fc-client-src/client-run.sh $SETUP_FLAG"
