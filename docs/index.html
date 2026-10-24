@@ -13,7 +13,7 @@
 <p>Run these from <a href="https://shell.cloud.google.com">Cloud Shell</a> (gcloud is already logged in there) or any machine with <code>gcloud</code> set up and a billing-enabled project selected (<code>gcloud config set project ID</code>).</p>
 <pre><code>git clone https://github.com/arc4randall/farcaster-in-three-gcp && cd farcaster-in-three-gcp</code></pre>
 <ol start="0">
-<li><strong>Provision compute</strong> (e2-standard-4, 2 TB pd-balanced disk, firewall for port 3382/udp):
+<li><strong>Provision compute</strong> (e2-standard-4, 2 TB pd-standard disk, firewall for port 3382/udp):
 <pre><code>./provision.sh</code></pre></li>
 <li><strong>Start a Snapchain read node</strong> (Docker, image pinned to <code>farcasterxyz/snapchain:0.14.3</code>):
 <pre><code>./node.sh</code></pre>
@@ -130,7 +130,7 @@ gcloud compute ssh fc-node -- 'curl -s localhost:3381/v1/info | jq ".shardInfos[
 <h2 id="cost">Cost and timing</h2>
 <table><tr><th>Item</th><th>Rate (us-central1, on-demand)</th><th>Per month</th></tr>
 <tr><td>e2-standard-4 VM</td><td>~$0.134/hour</td><td>~$98</td></tr>
-<tr><td>2,000 GB pd-balanced</td><td>~$0.10/GB-month</td><td>~$200</td></tr>
+<tr><td>2,000 GB pd-standard</td><td>~$0.04/GB-month</td><td>~$80</td></tr>
 <tr><td>Snapshot download</td><td>ingress is free</td><td>$0</td></tr>
 <tr><td>App key</td><td>gasless</td><td>$0 (onchain path: a few cents of ETH on Optimism)</td></tr></table>
 <p class="mut">Roughly $10/day. Check the <a href="https://cloud.google.com/products/calculator">pricing calculator</a> for your region. Delete the VM when you're done.</p>

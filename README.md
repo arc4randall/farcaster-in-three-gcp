@@ -8,7 +8,7 @@ Tutorial: https://arc4randall.github.io/farcaster-in-three-gcp/ ([中文](https:
 
 ```sh
 git clone https://github.com/arc4randall/farcaster-in-three-gcp && cd farcaster-in-three-gcp
-./provision.sh   # 0. e2-standard-4 + 2 TB pd-balanced + firewall (3382/udp)
+./provision.sh   # 0. e2-standard-4 + 2 TB pd-standard + firewall (3382/udp)
 ./node.sh        # 1. Snapchain read node, image pinned to 0.14.3
 ./client.sh      # 2. client on localhost:3000 over SSH; approve its key in the Farcaster app
 ```

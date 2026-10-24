@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 source ./config.env
 [ -n "$PROJECT" ] || { echo "No project. Run: gcloud config set project YOUR_PROJECT_ID" >&2; exit 1; }
 
-echo "project=$PROJECT zone=$ZONE vm=$VM machine=$MACHINE disk=${DISK_GB}GB"
+echo "project=$PROJECT zone=$ZONE vm=$VM machine=$MACHINE disk=${DISK_GB}GB type=$DISK_TYPE"
 gcloud services enable compute.googleapis.com --project "$PROJECT"
 
 # Gossip is QUIC over UDP 3382. 3381 (HTTP) and 3383 (gRPC) are what the
@@ -28,7 +28,7 @@ else
   gcloud compute instances create "$VM" --project "$PROJECT" --zone "$ZONE" \
     --machine-type "$MACHINE" \
     --image-family ubuntu-2404-lts-amd64 --image-project ubuntu-os-cloud \
-    --boot-disk-size "${DISK_GB}GB" --boot-disk-type pd-balanced \
+    --boot-disk-size "${DISK_GB}GB" --boot-disk-type "$DISK_TYPE" \
     --tags snapchain
 fi
 
