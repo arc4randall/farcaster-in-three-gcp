@@ -15,6 +15,11 @@ button.p{background:var(--acc);color:#fff;border-color:var(--acc)}.row{display:f
 </style></head><body><main>
 <header><h1 style="font-size:18px;margin:8px 0">fc-three</h1><small id="who">…</small></header>
 <small id="node"></small>
+<section id="connect" hidden style="border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0">
+<h2 style="font-size:16px;margin:0 0 6px">Connect your account</h2>
+<p class="mut" style="margin:4px 0">Approve this client's key in the Farcaster app. Your seed phrase never touches this client.</p>
+<div id="cbody"></div></section>
+<div id="app">
 <div class="row"><textarea id="text" rows="3" maxlength="1024" placeholder="Write a cast (max 1024 bytes)"></textarea></div>
 <div class="row"><button class="p" id="send">Cast</button><span id="reply" class="mut"></span><span id="status" class="mut"></span></div>
 <div class="row"><input id="follow" placeholder="username or FID to follow / view" style="flex:1"><button id="fol">Follow</button><button id="unf">Unfollow</button><button id="view">View</button></div>
@@ -23,6 +28,7 @@ button.p{background:var(--acc);color:#fff;border-color:var(--acc)}.row{display:f
 <div id="apps"></div></details>
 <div class="row"><button id="home">Following feed</button><small id="count" class="mut"></small></div>
 <div id="feed"></div>
+</div>
 </main><script>
 const $=s=>document.querySelector(s),st=m=>$("#status").textContent=m;let replyTo=null,viewFid=null;const inc=new Set(),exc=new Set();
 const api=async(p,b)=>{const r=await fetch(p,b?{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)}:{});const j=await r.json();if(!r.ok)throw new Error(j.error);return j};
@@ -45,5 +51,11 @@ $("#send").onclick=async()=>{const text=$("#text").value.trim();if(!text)return;
 const fol=undo=>async()=>{try{await api("/api/follow",{fid:await resolve($("#follow").value),undo});st(undo?"unfollowed":"followed")}catch(e){st(e.message)}};
 $("#fol").onclick=fol(false);$("#unf").onclick=fol(true);
 $("#view").onclick=async()=>{try{viewFid=await resolve($("#follow").value);load()}catch(e){st(e.message)}};$("#home").onclick=()=>{viewFid=null;load()};
-api("/api/me").then(m=>{$("#who").textContent=`@${m.profile.username??m.fid} · fid ${m.fid} · app key from app ${m.appFid} (${m.mode})`;$("#node").textContent=`reading ${m.node} · writing ${m.writeUrl}`});load();
+async function connect(){$("#cbody").innerHTML="<p class=mut>Creating a key request…</p>";try{const r=await api("/api/connect",{});
+ $("#cbody").innerHTML=`<div style="max-width:240px;background:#fff;padding:6px;border-radius:6px">${r.qr}</div><p><a href="${esc(r.deeplinkUrl)}">Open in the Farcaster app</a> (on this phone) or scan the code with your phone camera.</p><p class=mut>Requested by app FID ${r.appFid}. <span id="cstate">waiting for approval…</span></p>`;
+ for(;;){await new Promise(r=>setTimeout(r,2500));const s=await api("/api/connect/status");$("#cstate").textContent={pending:"waiting for approval…",approved:"approved, waiting for the onchain registration…","waiting-for-node":"registered; waiting for your node to see the key…",ready:"connected"}[s.state]??s.state;if(s.state==="ready"){location.reload();return}if(s.state==="error"||s.state==="none"){$("#cstate").textContent="request failed: "+(s.error??"start again");return}}}
+ catch(e){$("#cbody").innerHTML=`<p>${esc(e.message)}</p>`}}
+api("/api/me").then(m=>{if(!m.connected){$("#app").hidden=true;$("#connect").hidden=false;$("#who").textContent="not connected";
+ $("#cbody").innerHTML=m.appConfigured?'<button class="p" id="cbtn">Connect with the Farcaster app</button>':'<p>This client has no app FID yet. On the VM run <code>cd ~/fc-client-src && npm run app-key</code> (operator only, see the tutorial), then reload. Or use the seed-phrase path: <code>./client.sh --seed</code> with a test account.</p>';
+ const b=$("#cbtn");if(b)b.onclick=connect;return}$("#who").textContent=`@${m.profile.username??m.fid} · fid ${m.fid} · app key from app ${m.appFid} (${m.mode})`;$("#node").textContent=`reading ${m.node} · writing ${m.writeUrl}`;load()});
 </script></body></html>

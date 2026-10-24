@@ -18,26 +18,32 @@
 <li><strong>Start a Snapchain read node</strong> (Docker, image pinned to <code>farcasterxyz/snapchain:0.14.3</code>):
 <pre><code>./node.sh</code></pre>
 The node downloads a snapshot and then catches up. That takes hours; see <a href="#sync">sync</a>.</li>
-<li><strong>Run the client</strong> against your node. First run asks for your seed phrase and registers an app key; then open <a href="http://localhost:3000">localhost:3000</a>:
-<pre><code>./client.sh</code></pre></li>
+<li><strong>Run the client</strong> against your node, then open <a href="http://localhost:3000">localhost:3000</a> and press <em>Connect with the Farcaster app</em>. Scan the QR code with your phone and approve. No seed phrase:
+<pre><code>./client.sh</code></pre>
+<span class="mut">First run asks once for this client's <a href="#appfid">app FID</a> key. No app FID? Use <code>./client.sh --seed</code> with a test account instead.</span></li>
 </ol>
 <p class="mut">To tear everything down: <code>gcloud compute instances delete fc-node --zone us-central1-a</code>. The disk is deleted with it.</p>
 </section>
 
 <div class="warn" id="seed">
-<strong>Before you paste a seed phrase into anything, including this.</strong>
-<ul>
-<li>A seed phrase is total control of the account: it can transfer the FID, change the recovery address, and add or remove every key. Treat typing it as you would <code>rm -rf /</code>.</li>
-<li><strong>Use a test account.</strong> Make a throwaway FID for this tutorial rather than your main one.</li>
-<li>Only paste a seed phrase into software you have read or whose developers you trust. Read <a href="https://github.com/arc4randall/farcaster-in-three-gcp/blob/main/client/setup.mjs"><code>client/setup.mjs</code></a> (about 100 lines) before you run it.</li>
-<li>Prefer delegated signer authorization when you can: an app that shows you a request to approve in a wallet or an existing client means the phrase never leaves where it already is. We use the phrase here only because the bounty asks for it.</li>
-<li>What this client does with it: <code>setup.mjs</code> runs on your own VM and reads the phrase from your terminal (hidden input), so it travels only inside your encrypted SSH session. It derives the custody key in memory, signs two EIP-712 messages, and exits. The phrase is never written to disk, never sent to any other server, and never reaches the web UI. You can also run <code>npm run setup</code> in <code>client/</code> on your laptop, with ports 3381 and 3383 tunnelled to the VM, then copy <code>data/signer.json</code> to the VM, if you'd rather it never leave your machine. Only the new app key is saved, in <code>~/fc-client-src/data/signer.json</code> (mode 600) on your VM.</li>
-</ul></div>
+<strong>Seed phrases: read this before you type one anywhere, including here.</strong>
+<p>Pasting a seed phrase into a program is the <code>rm -rf /</code> of Farcaster. One wrong paste and there is no undo: whoever has the phrase can transfer your FID, change its recovery address, and add or remove every key. So:</p>
+<table>
+<tr><th>Rule</th><th>What this project does</th></tr>
+<tr><td>Prefer delegated signer approval</td><td>The default. <code>./client.sh</code> shows a QR code; you approve the key in the Farcaster app. Your phrase never touches this client.</td></tr>
+<tr><td>Use a test account if you import a phrase</td><td>The phrase path is opt-in (<code>./client.sh --seed</code>). Make a throwaway FID for it.</td></tr>
+<tr><td>Only paste phrases into software from developers you trust, or code you've read</td><td><a href="https://github.com/arc4randall/farcaster-in-three-gcp/blob/main/client/setup.mjs"><code>client/setup.mjs</code></a> is about 100 lines. Read it first. That includes trusting us.</td></tr>
+<tr><td>Keep the phrase local; derive, sign, discard</td><td><code>setup.mjs</code> runs on your own VM, reads the phrase with hidden input inside your SSH session, signs two EIP-712 messages in memory and exits. Never written to disk, never sent to any server, never reaches the web UI. Only the new app key is saved (<code>data/signer.json</code>, mode 600).</td></tr>
+<tr><td>Never type a phrase into a website</td><td>The web UI has no phrase field. It listens only on 127.0.0.1, behind your SSH tunnel.</td></tr>
+</table>
+<p>The one secret delegated mode needs is the <em>app's</em> custody key (see <a href="#appfid">app FID</a>), held by the operator on the VM, not any user's.</p>
+</div>
 
 <h2 id="before">Before you start</h2>
 <ul>
 <li>A Google Cloud project with billing. The VM costs about $10/day (<a href="#cost">breakdown</a>).</li>
-<li>An existing Farcaster account (FID) that has storage, and its seed phrase. An account created in the Farcaster app has storage already. You do <em>not</em> need ETH: the app key is added gaslessly.</li>
+<li>An existing Farcaster account (FID) with storage, signed in to the Farcaster app on your phone. Accounts created in the app already have storage.</li>
+<li>For the default delegated sign-in, a second FID to act as this client's identity (the <a href="#appfid">app FID</a>) and its custody key. If you don't have one, the <code>--seed</code> path works with a test account and needs no ETH.</li>
 <li>Patience for the first sync. The client cannot show a real feed until the node has caught up.</li>
 </ul>
 
@@ -51,12 +57,24 @@ The node downloads a snapshot and then catches up. That takes hours; see <a href
 
 <h3>App keys (signers)</h3>
 <p>An app key is an Ed25519 keypair. The app holds the private half and signs every cast, like, and follow with it. Each key records which app asked for it: when the key is added, the requesting app's FID signs a <code>SignedKeyRequest</code> containing the key, and that <code>requestFid</code> is stored with the key. That is how this client can tell which app produced any cast on the network: look up the cast's <code>signer</code> among the author's keys and read its <code>requestFid</code>.</p>
-<p>There are two ways to add a key:</p>
+<p>There are three ways to get a key added. This client supports all three:</p>
 <ul>
-<li><strong>Gasless <code>KEY_ADD</code></strong> (FIP-272, live since engine V16, the default here). A Snapchain message carrying the app's <code>SignedKeyRequest</code> and the custody address's EIP-712 <code>KeyAdd</code> signature, wrapped in an envelope signed by the new key itself. No transaction. The key declares <em>scopes</em> (we ask for cast, reaction and link add/remove only) and a sliding TTL of up to 90 days that refreshes every time the key signs something. Each FID has a nonce counter; a <code>KEY_ADD</code> must use <code>currentUserNonce + 1</code>, which <code>GET /v1/signersByFid</code> reports.</li>
+<li><strong>Delegated approval</strong> (default). The client makes a key and asks the user to approve it in the Farcaster app. Details below.</li>
+</ul>
+<p>And two ways for a holder of the custody key to add one directly (<code>./client.sh --seed</code>):</p>
+<ul>
+<li><strong>Gasless <code>KEY_ADD</code></strong> (FIP-272, live since engine V16; what <code>--seed</code> uses). A Snapchain message carrying the app's <code>SignedKeyRequest</code> and the custody address's EIP-712 <code>KeyAdd</code> signature, wrapped in an envelope signed by the new key itself. No transaction. The key declares <em>scopes</em> (we ask for cast, reaction and link add/remove only) and a sliding TTL of up to 90 days that refreshes every time the key signs something. Each FID has a nonce counter; a <code>KEY_ADD</code> must use <code>currentUserNonce + 1</code>, which <code>GET /v1/signersByFid</code> reports.</li>
 <li><strong>Onchain <code>KeyGateway.add</code></strong> on Optimism (<code>0x00000000fC56947c7E7183f8Ca4B62398CaAdf0B</code>). One transaction from the custody address, a few cents of ETH. Older, still valid, no scopes or expiry. Run <code>./client.sh --onchain</code> if you want this path. Note the two flows sign different EIP-712 domains (<code>getSignedKeyRequestMetadata</code> vs <code>getGaslessSignedKeyRequestMetadata</code>); mixing them up is the most common error.</li>
 </ul>
-<p>By default your own FID is the "app". To give this client a separate identity, register a second FID for it and set <code>APP_SEED_PHRASE</code> when running setup; every cast you post is then tagged with that app FID.</p>
+<h3 id="appfid">App FID and delegated approval</h3>
+<p>A key request has to be signed by the custody key of the requesting app's FID. That signature is what lets everyone else attribute your casts to this client, and it's the only secret delegated mode needs. It belongs to the operator, not to users.</p>
+<ul>
+<li><strong>What you need:</strong> a FID registered for the app (any FID works; a dedicated one is cleaner than your personal account) and its custody seed phrase or private key.</li>
+<li><strong>Where it lives:</strong> <code>npm run app-key</code> (run for you by <code>./client.sh</code> on first use) asks for it on the VM with hidden input, checks the FID on Optimism, and stores only the derived private key in <code>~/fc-client-src/data/app.json</code>, mode 600. It never leaves the VM.</li>
+<li><strong>The flow:</strong> the client generates an Ed25519 key, the app key signs an EIP-712 <code>SignedKeyRequest</code> (<code>requestFid</code>, <code>key</code>, <code>deadline</code>; domain <code>Farcaster SignedKeyRequestValidator</code>, chain 10), and the client POSTs it to <code>https://api.farcaster.xyz/v2/signed-key-requests</code>. That returns a <code>farcaster://signed-key-request?token=…</code> deeplink, shown as a QR code. The user approves in the Farcaster app, which registers the key onchain from their account. The client polls <code>GET /v2/signed-key-request?token=…</code> until <code>completed</code>, then waits until <em>your node</em> lists the key before using it.</li>
+<li><strong>Honest caveats:</strong> <code>api.farcaster.xyz</code> needs no API key (we checked: a request without one returns 200). It is still a third-party service, used once for the handoff to the phone. Every read and write after that goes only to your node. Because the approval is an onchain key add, the Farcaster app handles the transaction; whether the user is asked to cover a fee depends on the app (requests can be sponsored, which we don't do). We haven't measured this.</li>
+</ul>
+<p>In the <code>--seed</code> path your own FID is the "app" by default. To give this client a separate identity, register a second FID for it and set <code>APP_SEED_PHRASE</code> when running setup; every cast you post is then tagged with that app FID.</p>
 
 <h3>Snapchain messages</h3>
 <p>Everything you do is a protobuf <code>Message</code>: a <code>MessageData</code> body (type, FID, timestamp in seconds since 2021-01-01 UTC, network, and the body such as <code>castAddBody</code>), its BLAKE3 hash truncated to 20 bytes, an Ed25519 signature over the hash, and the signer's public key. Nodes accept a message only if the signer is a live key for that FID, the key's scope allows the type, and the FID has storage. Casts, likes and follows are sets with add/remove semantics: a later <code>LINK_REMOVE</code> beats an earlier <code>LINK_ADD</code>.</p>
@@ -90,8 +108,8 @@ gcloud compute ssh fc-node -- 'curl -s localhost:3381/v1/info | jq ".shardInfos[
 <p>Ports: 3382/udp is gossip and must be reachable. 3381 (HTTP) and 3383 (gRPC) are opened by <code>provision.sh</code> because the Snapchain docs ask for them. Run <code>PRIVATE_API=1 ./provision.sh</code> to leave them closed; the client works either way since it talks to <code>127.0.0.1</code>.</p>
 
 <h2 id="client">The client</h2>
-<p><code>client.sh</code> copies <code>client/</code> to the VM, installs Node 22 and the pinned dependencies (<code>@farcaster/hub-nodejs</code> 0.17.0, <code>viem</code>, <code>express</code>), runs setup on first use, and starts the server on <code>127.0.0.1:3000</code>. Your browser reaches it through the SSH tunnel (<code>-L 3000:127.0.0.1:3000</code>) that the same command opens. Nothing is exposed to the internet. On a phone, use the Cloud Shell web preview on port 3000.</p>
-<h3>What setup does</h3>
+<p><code>client.sh</code> copies <code>client/</code> to the VM, installs Node 22 and the pinned dependencies (<code>@farcaster/hub-nodejs</code> 0.17.0, <code>viem</code>, <code>express</code>, <code>qrcode</code>), asks for the app FID key on first use, and starts the server on <code>127.0.0.1:3000</code>. Your browser reaches it through the SSH tunnel (<code>-L 3000:127.0.0.1:3000</code>) that the same command opens. Nothing is exposed to the internet. On a phone, use the Cloud Shell web preview on port 3000.</p>
+<h3>What <code>--seed</code> setup does</h3>
 <ol>
 <li>Derives the custody account from the phrase and looks up its FID on Optimism.</li>
 <li>Generates a fresh Ed25519 key.</li>
@@ -130,9 +148,10 @@ gcloud compute ssh fc-node -- 'curl -s localhost:3381/v1/info | jq ".shardInfos[
 <h2>Sources</h2>
 <ul class="mut">
 <li><a href="https://snapchain.farcaster.xyz/getting-started">Snapchain: getting started</a>, <a href="https://snapchain.farcaster.xyz/node-types">validators vs read nodes</a>, <a href="https://snapchain.farcaster.xyz/guides/writing-messages">writing messages / gasless signers</a></li>
+<li><a href="https://docs.farcaster.xyz/reference/farcaster/signer-requests">Farcaster signer requests (delegated approval)</a></li>
 <li><a href="https://docs.neynar.com/snapchain/httpapi/httpapi">Snapchain HTTP API reference</a></li>
 <li><a href="https://docs.farcaster.xyz/learn/architecture/overview">Farcaster architecture</a>, <a href="https://github.com/farcasterxyz/protocol/discussions/266">FIP-272 discussion</a></li>
-<li>Outdated upstream docs we hit while writing this: <a href="https://github.com/arc4randall/farcaster-in-three-gcp/blob/main/NOTES-upstream.md">NOTES-upstream.md</a></li>
+<li>Outdated upstream docs we hit while writing this: <a href="https://github.com/arc4randall/farcaster-in-three-gcp/blob/main/NOTES-upstream.md">NOTES-upstream.md</a>, with ready patches in <a href="https://github.com/arc4randall/farcaster-in-three-gcp/tree/main/upstream">upstream/</a></li>
 </ul>
 <p class="mut">MIT licensed. Written by Randall Spence (<a href="https://github.com/arc4randall">@arc4randall</a>).</p>
 </main></body></html>

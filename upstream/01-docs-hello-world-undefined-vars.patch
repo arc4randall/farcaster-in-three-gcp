@@ -1,0 +1,15 @@
+--- a/docs/developers/guides/basics/hello-world.md
++++ b/docs/developers/guides/basics/hello-world.md
+@@ -142,9 +142,9 @@
+   // To add a key, we need to sign the metadata with the fid of the app we're adding the key on behalf of
+   // Use your personal fid, or register a separate fid for the app
+   const metadata = await eip712signer.getSignedKeyRequestMetadata({
+-    requestFid: APP_FID,
+-    key: APP_PRIVATE_KEY,
+-    deadline: Math.floor(Date.now() / 1000) + 60 * 60, // 1 hour from now
++    requestFid: BigInt(fid),
++    key: fromHex(publicKey, 'bytes'),
++    deadline: BigInt(Math.floor(Date.now() / 1000) + 60 * 60), // 1 hour from now
+   });
+ 
+   const { request: signerAddRequest } = await walletClient.simulateContract({

@@ -1,0 +1,22 @@
+--- a/docs/reference/farcaster/signer-requests.md
++++ b/docs/reference/farcaster/signer-requests.md
+@@ -60,7 +60,7 @@
+ /*** Generating a Signed Key Request signature ***/
+ 
+ const appFid = process.env.APP_FID;
+-const account = mnemonicToAccount(process.env.APP_MNENOMIC);
++const account = mnemonicToAccount(process.env.APP_MNEMONIC);
+ 
+ const deadline = Math.floor(Date.now() / 1000) + 86400; // signature is valid for 1 day
+ const signature = await account.signTypedData({
+@@ -93,8 +93,8 @@
+ const farcasterClientApi = 'https://api.farcaster.xyz';
+ const { token, deeplinkUrl } = await axios
+   .post(`${farcasterClientApi}/v2/signed-key-requests`, {
+-    key: publicKey,
+-    requestFid: fid,
++    key,
++    requestFid: appFid,
+     signature,
+     deadline,
+   })

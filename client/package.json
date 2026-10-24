@@ -8,15 +8,17 @@
     "node": ">=20"
   },
   "scripts": {
+    "app-key": "node app-key.mjs",
     "setup": "node setup.mjs",
     "setup:onchain": "node setup.mjs --onchain",
     "start": "node server.mjs",
     "test": "node test.mjs",
-    "check": "node --check lib.mjs && node --check setup.mjs && node --check server.mjs"
+    "check": "node --check lib.mjs && node --check setup.mjs && node --check server.mjs && node --check delegated.mjs && node --check app-key.mjs"
   },
   "dependencies": {
     "@farcaster/hub-nodejs": "0.17.0",
     "express": "5.3.0",
+    "qrcode": "1.5.4",
     "viem": "2.57.11"
   }
 }

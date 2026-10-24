@@ -1,5 +1,6 @@
 // Import a seed phrase, find its FID, and give this client its own app key.
-//   node setup.mjs            -> gasless KEY_ADD message (FIP-272). Default. No ETH needed.
+// Alternate path (the default is delegated approval, see delegated.mjs). Use a TEST account.
+//   node setup.mjs            -> gasless KEY_ADD message (FIP-272). No ETH needed.
 //   node setup.mjs --onchain  -> legacy KeyGateway.add on Optimism (one tx, needs a little ETH)
 // The seed phrase is read in this terminal, used in memory to sign two EIP-712
 // messages, and dropped. It is never written to disk or sent anywhere.

@@ -1,0 +1,11 @@
+--- a/docs/learn/architecture/overview.md
++++ b/docs/learn/architecture/overview.md
+@@ -12,7 +12,7 @@
+ 
+ - Creating an [account](../what-is-farcaster/accounts.md).
+ - Paying rent to [store data](../what-is-farcaster/messages.md#storage).
+-- Adding account keys for [connected apps](../what-is-farcaster/apps.md#connected-apps).
++- Adding account keys for [connected apps](../what-is-farcaster/apps.md#connected-apps) through the Key Gateway. Keys can also be added offchain with a gasless `KEY_ADD` message; see [Writing to Snapchain](https://snapchain.farcaster.xyz/guides/writing-messages#gasless-signers).
+ 
+ ## Offchain
+ 

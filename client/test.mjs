@@ -10,3 +10,12 @@ const m = (await makeKeyAdd(body, { fid: 123, network: FarcasterNetwork.MAINNET 
 console.log("keyadd valid:", (await validations.validateMessage(m)).isOk(), Message.encode(m).finish().length, "bytes");
 const c = (await makeCastAdd({ text:"hi", embeds:[], embedsDeprecated:[], mentions:[], mentionsPositions:[], type:0 }, { fid:123, network: FarcasterNetwork.MAINNET }, s))._unsafeUnwrap();
 console.log("cast valid:", (await validations.validateMessage(c)).isOk());
+
+// Delegated flow: the SignedKeyRequest signature must verify against the app's address
+// in the onchain SignedKeyRequestValidator domain (that's what the Farcaster app checks).
+import { verifyKeyRequest } from "@farcaster/hub-nodejs";
+import { hexToBytes } from "viem";
+const app = new ViemLocalEip712Signer(acct);
+const req = { requestFid: 123n, key, deadline: BigInt(Math.floor(Date.now() / 1000) + 86400) };
+const sig = (await app.signKeyRequest(req))._unsafeUnwrap();
+console.log("signed key request valid:", (await verifyKeyRequest(req, sig, hexToBytes(acct.address)))._unsafeUnwrap());

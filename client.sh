@@ -6,10 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck source=config.env
 source ./config.env
-SETUP_FLAG="${1:-}"   # pass --onchain for the legacy KeyGateway transaction
+SETUP_FLAG="${1:-}"   # default: delegated approval. --seed: import a test account phrase. --onchain: legacy KeyGateway tx
 gcloud compute ssh "$VM" --zone "$ZONE" --project "$PROJECT" -- "mkdir -p ~/fc-client-src"
 gcloud compute scp --recurse --zone "$ZONE" --project "$PROJECT" \
-  client/package.json client/package-lock.json client/lib.mjs client/setup.mjs client/server.mjs client/test.mjs client/public remote/client-run.sh \
+  client/package.json client/package-lock.json client/lib.mjs client/setup.mjs client/server.mjs client/delegated.mjs client/app-key.mjs client/test.mjs client/public remote/client-run.sh \
   "$VM":~/fc-client-src/ >/dev/null
 echo "Open http://localhost:3000 once you see 'client on ...'"
 gcloud compute ssh "$VM" --zone "$ZONE" --project "$PROJECT" -- -t -L 3000:127.0.0.1:3000 \
